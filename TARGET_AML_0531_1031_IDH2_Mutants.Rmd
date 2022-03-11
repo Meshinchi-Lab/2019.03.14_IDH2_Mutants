@@ -1,0 +1,192 @@
+---
+title: 'IDH2 Mutants Affect on Outcome'
+author: "Jenny Smith"
+date: ", 2018"
+output: html_document
+---
+
+
+
+```{r setup}
+library(knitr)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=50),tidy=TRUE, fig.align='center', fig.height=5, fig.width=8, dpi = 600)
+knitr::opts_knit$set(root.dir = '/fh/fast/meshinchi_s/workingDir/TARGET/AML_TARGET/Clinical/analysis/2019.03.14_IDH2_Mutants/')
+options(stringsAsFactors = FALSE)
+```
+
+
+```{r message = FALSE, warning=FALSE}
+library(stringr)
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(tibble)
+library(tidyr)
+getwd()
+```
+
+```{r}
+source("~/scripts/survival_analysis/Survplot_Functions_2018.10.24.r")
+```
+
+
+#Read in the Clinical Data
+
+```{r}
+merged <- read.csv("~/reference_mapping-files/TARGET_AML_0531_1031_merged_CDEs_1.10.19.csv")
+
+head(merged[,1:5])
+dim(merged)
+```
+
+
+```{r}
+IDH2 <- read.csv("IDH2_CDEs_oncoprint.csv") 
+
+
+head(IDH2)
+dim(IDH2)
+```
+
+```{r}
+manifest.RDB <- read.csv("/fh/fast/meshinchi_s/workingDir/TARGET/AML_TARGET/SequencingDataMatrix/TARGET_AML_0531_1031_miRNAseq_Ribodepletion_mRNAseq_Manifest_v4.csv")
+
+head(manifest.RDB)
+```
+
+```{r}
+manifest.other <- read.csv("/fh/fast/meshinchi_s/workingDir/TARGET/AML_TARGET/SequencingDataMatrix/TARGET_AML_0531_1031_SeqDataAvailability_3.29.18.csv") %>% 
+  dplyr::select(USI,LowDepth_RNASeq.mRNAseq) %>% 
+  filter(LowDepth_RNASeq.mRNAseq == 1)
+
+
+dim(manifest.other)
+```
+
+
+
+#Define Groups
+
+```{r}
+merged <- merged %>% 
+  mutate(IDH2=case_when(
+    USI %in% IDH2$TARGET.USI.1 ~ "Yes", 
+    (! USI %in% IDH2$TARGET.USI.1) & (USI %in% manifest.RDB$USI | USI %in% manifest.other$USI) ~ "No", 
+    TRUE ~ "Unknown")) %>%
+  mutate(IDH2.NPM1=case_when(
+    IDH2 == "Yes" & NPM.mutation == "Yes" ~ "NPM1.IDH2",
+    IDH2 == "Yes" & NPM.mutation == "No" ~ "IDH2", 
+    IDH2 == "No" ~ "No",
+    TRUE ~ "Unknown")) %>% 
+  
+  filter(IDH2 != "Unknown" & NPM.mutation != "Unknown") %>%
+  mutate(X="AML")
+
+```
+
+```{r}
+table(merged$IDH2)
+
+table(merged$IDH2, merged$NPM.mutation)
+
+# table(merged$NPM.mutation, merged$FLT3.ITD.positive., merged$IDH2)
+# table(merged$NPM.mutation, merged$CEBPA.mutation)
+
+table(merged$IDH2.NPM1)
+```
+
+There are 5 with NPM1, IDH2, and FLT3-ITD
+
+
+#Survival Plots
+
+```{r}
+KM.all <- KM.plots(df = merged[], "X", 
+                   type = "OS", 
+                   covariate = "IDH2",
+                   cohort = "0531",
+                   riskTable = FALSE)
+
+```
+
+```{r}
+KM.all$OS.diff
+```
+
+```{r fig.height=10, fig.width=10}
+grid.arrange(grobs=c(KM.all$OS,KM.all$EFS), ncol=2, nrow=2)
+```
+
+
+```{r}
+KM.NPM <- KM.plots(df = merged, 
+                   "NPM.mutation",
+                   type = "OS", 
+                   covariate = "IDH2",
+                   cohort = "0531",
+                   riskTable = FALSE)
+KM.NPM
+```
+
+```{r}
+KM.NPM$OS.diff[[1]]
+KM.NPM$OS.diff[[2]]
+```
+
+```{r fig.height=10, fig.width=10}
+# arrangeGrob(grobs= KM.NPM$OS)
+
+# tiff("NPM1.Mutations_with_IDH2_Mutations.tiff", height = 10, width=10, units="in", res=300)
+grid.arrange(grobs=c(KM.NPM$OS,KM.NPM$EFS), ncol=2, nrow=2)
+# dev.off()
+```
+
+
+```{r}
+KM.NPM_rmFLT3 <- KM.plots(df = filter(merged, FLT3.ITD.positive. != "Yes"), 
+                   "NPM.mutation",
+                   type = "OS", 
+                   covariate = "IDH2",
+                   cohort = "0531",
+                   riskTable = FALSE)
+KM.NPM_rmFLT3
+```
+
+```{r}
+KM.NPM_rmFLT3$OS.diff
+```
+
+```{r fig.height=10, fig.width=10}
+grid.arrange(grobs=c(KM.NPM_rmFLT3$OS, KM.NPM_rmFLT3$EFS))
+```
+
+
+```{r}
+KM.IDH2only <- KM.plots(df = filter(merged, IDH2.NPM1 != "No"), 
+                   "X",
+                   type = "OS", 
+                   covariate = "IDH2.NPM1",
+                   cohort = "0531",
+                   riskTable = FALSE)
+
+```
+
+```{r}
+KM.IDH2only$OS.diff
+```
+
+```{r fig.height=10, fig.width=6}
+# tiff("NPM1.Mutations_with_IDH2_Mutations_Subset.tiff", height = 10, width=6, units="in", res=300)
+grid.arrange(grobs=c(KM.IDH2only$OS, KM.IDH2only$EFS))
+# dev.off()
+```
+
+
+
+
+#Session Information 
+
+```{r}
+sessionInfo()
+```
+
